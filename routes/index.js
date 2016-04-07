@@ -2,44 +2,43 @@ var express = require('express');
 var router = express.Router();
 
 var request = require('request');
+var CryptoJS = require("crypto-js");
 
 /* GET home page. */
-router.get('/', function(req, res, next) {
-  // STEP 1
-  var key = process.env.TWITTER_CONSUMER_KEY
-  var secret = process.env.TWITTER_CONSUMER_SECRET
+router.get('/', function(req, res) {
+  var key = process.env.TWITTER_CONSUMER_KEY;
+  var nonce = "kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg";
+  var method = "HMAC-SHA1";
+  var seconds = parseInt(new Date()/1000);
+  var access_token = process.env.TWITTER_ACCESS_TOKEN;
+  var version = "1.0";
 
-  var token = `${key}:${secret}`;
-  var encoded = new Buffer(token).toString('base64');
+  var params = `oauth_consumer_key=${escape(key)}&oauth_nonce=${escape(nonce)}&oauth_signature_method=${method}&oauth_timestamp=${seconds}&oauth_token=${escape(access_token)}&oauth_version=${version}`;
 
-  // STEP 2
-  var tokenOptions = {
-    url: 'https://api.twitter.com/oauth2/token',
-    headers: {
-      'Authorization': `Basic ${encoded}`,
-      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-    },
+  var base = `POST&${escape('https://api.twitter.com/oauth/request_token')}&${params}`;
+  var signingKey = `${escape(process.env.TWITTER_CONSUMER_SECRET)}&${escape(process.env.TWITTER_ACCESS_TOKEN_SECRET)}`;
+
+  var signature = CryptoJS.enc.Base64.stringify(CryptoJS.HmacSHA1(base, signingKey));
+
+  var headerString = `OAuth oauth_consumer_key="${escape(key)}", oauth_callback="${escape('https://127.0.1.1/auth')}", oauth_nonce="${escape(nonce)}", oauth_signature="${escape(signature)}", oauth_signature_method="${method}", oauth_timestamp="${seconds}", oauth_token="${escape(access_token)}", oauth_version="${version}"`
+
+  console.log(headerString);
+
+  var options = {
+    url: 'https://api.twitter.com/oauth/request_token',
     method: 'POST',
-    body: "grant_type=client_credentials"
+    headers: {
+      'Authorization': headerString
+    }
   };
 
-  request(tokenOptions, function(error, tokenResponse, tokenBody) {
-    if (!error && tokenResponse.statusCode == 200) {
-      // STEP 3
-      var token = JSON.parse(tokenBody).access_token
-      var statusesOptions = {
-        url: 'https://api.twitter.com/1.1/statuses/user_timeline.json?screen_name=changamanda&count=2',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      }
-
-      request(statusesOptions, function(error, response, twitterBody){
-        // RETURN JSON
-        res.json(twitterBody);
-      })
-    }
-  });
+  request(options, function (error, response, body) {
+    console.log(body)
+  })
 });
+
+router.get('/auth', function(req, res){
+  console.log(req.body);
+})
 
 module.exports = router;
